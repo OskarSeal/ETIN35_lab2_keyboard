@@ -27,12 +27,30 @@ module keyboard_ctrl (
     logic [REFRESH_CNT_WIDTH-1:0] refresh_cnt;
     logic [1:0] digit_sel;
 
+    // PS/2 sends a 0xF0 break prefix followed by the same code on key
+    // release. Both bytes are swallowed here so only key presses (make
+    // codes) shift into the display.
+    localparam logic [7:0] BREAK_PREFIX = 8'hF0;
+
+    logic break_pending;
+    logic shift_in;
+
+    assign shift_in = valid_code & ~break_pending & (scan_code_in != BREAK_PREFIX);
+
+    always_ff @(posedge clk) begin : break_tracking
+        if (rst) begin
+            break_pending <= 1'b0;
+        end else if (valid_code) begin
+            break_pending <= (scan_code_in == BREAK_PREFIX);
+        end
+    end
+
     always_ff @(posedge clk) begin : history
         if (rst) begin
             for (int i = 0; i < NUM_DIGITS; i++) begin
                 scan_code_hist[i] <= 8'h00;
             end
-        end else if (valid_code) begin
+        end else if (shift_in) begin
             for (int i = NUM_DIGITS - 1; i > 0; i--) begin
                 scan_code_hist[i] <= scan_code_hist[i-1];
             end
