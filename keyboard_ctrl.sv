@@ -21,40 +21,43 @@ module keyboard_ctrl (
     // fast enough that persistence of vision makes them look simultaneous.
     localparam int REFRESH_CNT_WIDTH = 16;
 
+    // Break-code prefix: a key release is sent as 0xF0 followed by the
+    // make code of the released key.
+    localparam logic [7:0] BREAK_CODE = 8'hF0;
+
     // Most recently received scan codes, one per digit (index 0 = newest)
     logic [7:0] scan_code_hist [0:NUM_DIGITS-1];
 
     logic [REFRESH_CNT_WIDTH-1:0] refresh_cnt;
     logic [1:0] digit_sel;
 
-    // PS/2 sends a 0xF0 break prefix followed by the same code on key
-    // release. Both bytes are swallowed here so only key presses (make
-    // codes) shift into the display.
-    localparam logic [7:0] BREAK_PREFIX = 8'hF0;
-
+    // High after a 0xF0 prefix has been seen, while we wait for the make
+    // code that identifies the released key.
     logic break_pending;
-    logic shift_in;
 
-    assign shift_in = valid_code & ~break_pending & (scan_code_in != BREAK_PREFIX);
-
-    always_ff @(posedge clk) begin : break_tracking
-        if (rst) begin
-            break_pending <= 1'b0;
-        end else if (valid_code) begin
-            break_pending <= (scan_code_in == BREAK_PREFIX);
-        end
-    end
-
+    // Only a key *release* updates the display. Each tap produces three
+    // frames on the wire: make code (press), 0xF0 (break prefix), make
+    // code (release). We ignore the initial make code, arm on 0xF0, then
+    // store the byte that follows it.
     always_ff @(posedge clk) begin : history
         if (rst) begin
             for (int i = 0; i < NUM_DIGITS; i++) begin
                 scan_code_hist[i] <= 8'h00;
             end
-        end else if (shift_in) begin
-            for (int i = NUM_DIGITS - 1; i > 0; i--) begin
-                scan_code_hist[i] <= scan_code_hist[i-1];
+            break_pending <= 1'b0;
+        end else if (valid_code) begin
+            if (scan_code_in == BREAK_CODE) begin
+                // Start of a break sequence; next byte is the released key
+                break_pending <= 1'b1;
+            end else if (break_pending) begin
+                // Byte following 0xF0 -> key released, show it now
+                for (int i = NUM_DIGITS - 1; i > 0; i--) begin
+                    scan_code_hist[i] <= scan_code_hist[i-1];
+                end
+                scan_code_hist[0] <= scan_code_in;
+                break_pending <= 1'b0;
             end
-            scan_code_hist[0] <= scan_code_in;
+            // else: initial make code (press) -> ignore, wait for release
         end
     end
 
