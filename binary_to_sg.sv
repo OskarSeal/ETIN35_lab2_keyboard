@@ -9,7 +9,6 @@ module binary_to_sg (
     output logic [7:0] sev_seg
     );
 
-    // Active-high segments, bit order {dp, g, f, e, d, c, b, a}
     always_comb begin
         case (binary_in)
             4'd0:    sev_seg = 8'b00111111;
