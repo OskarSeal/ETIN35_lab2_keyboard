@@ -44,11 +44,12 @@ module keyboard_ctrl (
     // code (release). We ignore the initial make code, arm on 0xF0, then
     // store the byte that follows it.
     always_comb begin : next_state
-        for (int i = 0; i < NUM_DIGITS; i++) begin
-            scan_code_hist_next[i] = scan_code_hist[i];
-        end
-        break_pending_next = break_pending;
-        refresh_cnt_next   = refresh_cnt + 1'b1;
+        scan_code_hist_next[0] = scan_code_hist[0];
+        scan_code_hist_next[1] = scan_code_hist[1];
+        scan_code_hist_next[2] = scan_code_hist[2];
+        scan_code_hist_next[3] = scan_code_hist[3];
+        break_pending_next     = break_pending;
+        refresh_cnt_next       = refresh_cnt + 1'b1;
 
         if (valid_code) begin
             if (scan_code_in == BREAK_CODE) begin
@@ -56,9 +57,9 @@ module keyboard_ctrl (
                 break_pending_next = 1'b1;
             end else if (break_pending) begin
                 // Byte following 0xF0 -> key released, show it now
-                for (int i = NUM_DIGITS - 1; i > 0; i--) begin
-                    scan_code_hist_next[i] = scan_code_hist[i-1];
-                end
+                scan_code_hist_next[3] = scan_code_hist[2];
+                scan_code_hist_next[2] = scan_code_hist[1];
+                scan_code_hist_next[1] = scan_code_hist[0];
                 scan_code_hist_next[0] = scan_code_in;
                 break_pending_next     = 1'b0;
             end
@@ -68,17 +69,19 @@ module keyboard_ctrl (
 
     always_ff @(posedge clk) begin : registers
         if (rst) begin
-            for (int i = 0; i < NUM_DIGITS; i++) begin
-                scan_code_hist[i] <= 8'h00;
-            end
-            break_pending <= 1'b0;
-            refresh_cnt   <= '0;
+            scan_code_hist[0] <= 8'h00;
+            scan_code_hist[1] <= 8'h00;
+            scan_code_hist[2] <= 8'h00;
+            scan_code_hist[3] <= 8'h00;
+            break_pending     <= 1'b0;
+            refresh_cnt       <= '0;
         end else begin
-            for (int i = 0; i < NUM_DIGITS; i++) begin
-                scan_code_hist[i] <= scan_code_hist_next[i];
-            end
-            break_pending <= break_pending_next;
-            refresh_cnt   <= refresh_cnt_next;
+            scan_code_hist[0] <= scan_code_hist_next[0];
+            scan_code_hist[1] <= scan_code_hist_next[1];
+            scan_code_hist[2] <= scan_code_hist_next[2];
+            scan_code_hist[3] <= scan_code_hist_next[3];
+            break_pending     <= break_pending_next;
+            refresh_cnt       <= refresh_cnt_next;
         end
     end
 
