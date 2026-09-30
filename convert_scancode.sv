@@ -19,11 +19,10 @@ module convert_scancode (
     // the start bit has been pushed out the far end.
     localparam int FRAME_BITS = 11;
 
-    logic       receiving; // 0 = waiting for a start bit, 1 = mid-frame
     logic [9:0] shift_reg;
-    logic [3:0] bit_count; // counts 0..FRAME_BITS-1
+    // 0 = idle, waiting for a start bit; 1..FRAME_BITS-1 = mid-frame
+    logic [3:0] bit_count;
 
-    logic       receiving_next;
     logic [9:0] shift_reg_next;
     logic [3:0] bit_count_next;
     logic       valid_scan_code_next;
@@ -34,18 +33,16 @@ module convert_scancode (
     always_comb begin : next_state
         shifted = {serial_data, shift_reg[9:1]};
 
-        receiving_next       = receiving;
         shift_reg_next       = shift_reg;
         bit_count_next       = bit_count;
         valid_scan_code_next = 1'b0;
         scan_code_out_next   = scan_code_out;
 
         if (edge_found) begin
-            if (!receiving) begin
+            if (bit_count == 4'd0) begin
                 // A frame only really begins on a low start bit. Ignoring
                 // other edges keeps us aligned to real byte boundaries.
                 if (serial_data == 1'b0) begin
-                    receiving_next = 1'b1;
                     shift_reg_next = 10'b0;
                     bit_count_next = 4'd1;
                 end
@@ -55,7 +52,7 @@ module convert_scancode (
                     // This edge carries the stop bit, which must be high.
                     // If it isn't, the frame is misaligned or corrupt, so
                     // drop it rather than trusting the data.
-                    receiving_next = 1'b0;
+                    bit_count_next = 4'd0; // back to idle
                     if (serial_data == 1'b1) begin
                         valid_scan_code_next = 1'b1;
                         scan_code_out_next   = shifted[7:0];
@@ -69,13 +66,11 @@ module convert_scancode (
 
     always_ff @(posedge clk) begin : registers
         if (rst) begin
-            receiving       <= 1'b0;
             shift_reg       <= 10'b0;
             bit_count       <= 4'd0;
             valid_scan_code <= 1'b0;
             scan_code_out   <= 8'b0;
         end else begin
-            receiving       <= receiving_next;
             shift_reg       <= shift_reg_next;
             bit_count       <= bit_count_next;
             valid_scan_code <= valid_scan_code_next;
