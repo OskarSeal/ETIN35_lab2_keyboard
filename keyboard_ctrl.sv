@@ -12,37 +12,28 @@ module keyboard_ctrl (
     output logic [7:0] code_to_display,
     output logic [3:0] seg_en
     );
-
+    //Number of digits to display
     localparam int NUM_DIGITS = 4;
-
-    // Top 2 bits of this counter select the active digit. Only one
-    // seven-segment display can be driven at a time (code_to_display/num
-    // is shared by all four), so the digits are refreshed in round-robin
-    // fast enough that persistence of vision makes them look simultaneous.
+    // Counter size that controls the refresh rate of the display. Takes the top two bits to decide which display to show. 
     localparam int REFRESH_CNT_WIDTH = 16;
 
-    // Break-code prefix: a key release is sent as 0xF0 followed by the
-    // make code of the released key.
     localparam logic [7:0] BREAK_CODE = 8'hF0;
 
-    // Most recently received scan codes, one per digit (index 0 = newest)
+    // Most recently received scan codes
     logic [7:0] scan_code_hist [0:NUM_DIGITS-1];
-
+    // The actual counter of the refresh rate. 
     logic [REFRESH_CNT_WIDTH-1:0] refresh_cnt;
+    // The two digits selected for which display to show. 
     logic [1:0] digit_sel;
 
-    // High after a 0xF0 prefix has been seen, while we wait for the make
-    // code that identifies the released key.
+    // Makes sure that the break code has been received. 
     logic break_pending;
 
     logic [7:0] scan_code_hist_next [0:NUM_DIGITS-1];
     logic [REFRESH_CNT_WIDTH-1:0] refresh_cnt_next;
     logic break_pending_next;
 
-    // Only a key *release* updates the display. Each tap produces three
-    // frames on the wire: make code (press), 0xF0 (break prefix), make
-    // code (release). We ignore the initial make code, arm on 0xF0, then
-    // store the byte that follows it.
+    // Only a key *release* updates the display.
     always_comb begin : next_state
         scan_code_hist_next[0] = scan_code_hist[0];
         scan_code_hist_next[1] = scan_code_hist[1];
@@ -63,7 +54,6 @@ module keyboard_ctrl (
                 scan_code_hist_next[0] = scan_code_in;
                 break_pending_next     = 1'b0;
             end
-            // else: initial make code (press) -> ignore, wait for release
         end
     end
 
@@ -88,14 +78,9 @@ module keyboard_ctrl (
     assign digit_sel = refresh_cnt[REFRESH_CNT_WIDTH-1:REFRESH_CNT_WIDTH-2];
 
     always_comb begin : outputs
-        if (rst) begin
-            code_to_display = 8'h00;
-            seg_en          = 4'b1111;
-        end else begin
-            code_to_display = scan_code_hist[digit_sel];
-            seg_en          = 4'b1111;
-            seg_en[digit_sel] = 1'b0; // active-low: enable only the selected digit
-        end
+        code_to_display = scan_code_hist[digit_sel];
+        seg_en          = 4'b1111;
+        seg_en[digit_sel] = 1'b0; // active-low: enable only the selected digit
     end
 
 endmodule
